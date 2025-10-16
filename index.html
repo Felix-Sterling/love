@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>神秘网站</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FF85A2',
+                        secondary: '#FFC2D1',
+                        light: '#FFF0F3',
+                        dark: '#594A4E'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .heart-beat {
+                animation: heartBeat 1s infinite;
+            }
+            .morse-dot {
+                animation: morseDot 0.5s;
+            }
+            .morse-dash {
+                animation: morseDash 1.5s;
+            }
+            .float-heart {
+                position: absolute;
+                opacity: 0;
+                animation: floatHeart 6s ease-in-out forwards;
+            }
+        }
+
+        @keyframes heartBeat {
+            0%, 100% { transform: scale(1); }
+            14% { transform: scale(1.2); }
+            28% { transform: scale(1); }
+            42% { transform: scale(1.2); }
+            70% { transform: scale(1); }
+        }
+
+        @keyframes morseDot {
+            0%, 100% { opacity: 0.2; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        @keyframes morseDash {
+            0%, 100% { opacity: 0.2; transform: scale(1); }
+            25% { opacity: 1; transform: scale(1.2); }
+            75% { opacity: 1; transform: scale(1.2); }
+        }
+
+        @keyframes floatHeart {
+            0% {
+                bottom: -10%;
+                left: var(--start-x);
+                transform: scale(0.3) rotate(0deg);
+                opacity: 0.8;
+            }
+            50% {
+                transform: scale(0.5) rotate(180deg);
+                opacity: 0.6;
+            }
+            100% {
+                bottom: 110%;
+                left: var(--end-x);
+                transform: scale(0.7) rotate(360deg);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-light min-h-screen flex flex-col items-center justify-center p-4 text-dark relative overflow-hidden">
+    <div id="heart-container" class="relative w-full max-w-2xl flex flex-col items-center justify-center py-16">
+        <!-- 初始状态隐藏爱心，只显示闪烁的圆点 -->
+        <div id="morse-indicator" class="text-primary text-[150px] md:text-[200px] opacity-20 transition-opacity duration-300">
+            <i class="fa fa-circle"></i>
+        </div>
+        <div id="heart" class="text-primary text-[150px] md:text-[200px] opacity-0 transition-opacity duration-500 hidden">
+            <i class="fa fa-heart"></i>
+        </div>
+        <!-- 彩蛋画布 -->
+        <canvas id="easter-egg-canvas" class="hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] md:w-[400px] md:h-[400px] z-20"></canvas>
+        <div id="message" class="mt-10 text-center max-w-md">
+            <p class="text-lg md:text-xl mb-6">这段闪烁的摩斯密码代表着一个秘密信息，你能破译它的含义吗？</p>
+            <div id="input-container" class="flex flex-col sm:flex-row gap-3 justify-center">
+                <input type="text" id="answer" placeholder="输入你破译的内容" class="px-4 py-2 rounded-lg border border-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all">
+                <button id="submit" class="bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg transition-all transform hover:scale-105">
+                    提交答案
+                </button>
+            </div>
+            <div id="result" class="mt-6 text-xl font-medium text-primary hidden"></div>
+        </div>
+        <button id="restart" class="mt-8 px-6 py-3 bg-secondary hover:bg-secondary/90 text-dark rounded-lg transition-all transform hover:scale-105 hidden">
+            重新开始
+        </button>
+    </div>
+    <div id="floating-hearts" class="fixed inset-0 pointer-events-none z-10 hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const heart = document.getElementById('heart');
+            const morseIndicator = document.getElementById('morse-indicator');
+            const answerInput = document.getElementById('answer');
+            const submitBtn = document.getElementById('submit');
+            const resultDiv = document.getElementById('result');
+            const restartBtn = document.getElementById('restart');
+            const floatingHearts = document.getElementById('floating-hearts');
+            const easterEggCanvas = document.getElementById('easter-egg-canvas');
+            const ctx = easterEggCanvas.getContext('2d');
+            
+            // 彩蛋密码设置为"心动"
+            const easterEggCode = "我爱金辉";
+            const secretMessage = '我爱你';
+            
+            // 摩斯密码映射表
+            const morseCodeMap = {
+                '我': '···-·',
+                '爱': '·-··',
+                '你': '·--'
+            };
+
+            // 将"我爱你"转换为摩斯密码数组
+            const morseSequence = [];
+            for (let char of secretMessage) {
+                morseSequence.push(...morseCodeMap[char].split(''));
+                morseSequence.push(' '); // 字符间空格
+            }
+            morseSequence.pop(); // 移除最后一个空格
+
+            let currentIndex = 0;
+            let isPlaying = false;
+            let animationInterval;
+
+            // 开始播放摩斯密码动画（使用圆点指示器）
+            function startMorseAnimation() {
+                if (isPlaying) return;
+                isPlaying = true;
+                
+                animationInterval = setInterval(() => {
+                    if (currentIndex >= morseSequence.length) {
+                        currentIndex = 0;
+                    }
+                    
+                    const symbol = morseSequence[currentIndex];
+                    
+                    // 重置指示器状态
+                    morseIndicator.className = 'text-primary text-[150px] md:text-[200px] transition-opacity duration-300';
+                    
+                    if (symbol === '·') {
+                        morseIndicator.classList.add('morse-dot');
+                    } else if (symbol === '-') {
+                        morseIndicator.classList.add('morse-dash');
+                    } else {
+                        // 空格间隔，保持低透明度
+                        morseIndicator.classList.add('opacity-20');
+                    }
+                    
+                    currentIndex++;
+                }, 700);
+            }
+
+            // 创建浮动爱心
+            function createFloatingHeart() {
+                const heart = document.createElement('div');
+                heart.className = 'float-heart text-primary';
+                heart.innerHTML = '<i class="fa fa-heart"></i>';
+                
+                // 随机大小
+                const size = Math.random() * 20 + 20;
+                heart.style.fontSize = `${size}px`;
+                
+                // 随机起始位置和结束位置
+                heart.style.setProperty('--start-x', `${Math.random() * 100}%`);
+                heart.style.setProperty('--end-x', `${Math.random() * 100}%`);
+                
+                // 随机延迟
+                heart.style.animationDelay = `${Math.random() * 6}s`;
+                
+                floatingHearts.appendChild(heart);
+                
+                // 动画结束后移除元素
+                setTimeout(() => {
+                    heart.remove();
+                }, 6000);
+            }
+
+            // 大量生成爱心
+            function generateHearts() {
+                floatingHearts.classList.remove('hidden');
+                for (let i = 0; i < 50; i++) {
+                    setTimeout(createFloatingHeart, i * 150);
+                }
+            }
+            
+            // 绘制爱心函数 - 先画轮廓再填充
+            function drawHeart() {
+                // 设置画布尺寸
+                easterEggCanvas.width = easterEggCanvas.offsetWidth;
+                easterEggCanvas.height = easterEggCanvas.offsetHeight;
+                
+                const centerX = easterEggCanvas.width / 2;
+                const centerY = easterEggCanvas.height / 2;
+                const size = Math.min(easterEggCanvas.width, easterEggCanvas.height) / 3;
+                
+                // 清除画布
+                ctx.clearRect(0, 0, easterEggCanvas.width, easterEggCanvas.height);
+                
+                // 绘制爱心轮廓的点集
+                const points = [];
+                for (let t = 0; t <= 2 * Math.PI; t += 0.01) {
+                    const x = 16 * Math.pow(Math.sin(t), 3);
+                    const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                    points.push({
+                        x: centerX + x * size / 16,
+                        y: centerY - y * size / 16 // 负号是为了翻转Y轴
+                    });
+                }
+                
+                // 绘制轮廓动画
+                let i = 0;
+                const outlineInterval = setInterval(() => {
+                    if (i >= points.length) {
+                        clearInterval(outlineInterval);
+                        // 轮廓完成后开始填充动画
+                        fillHeart(centerX, centerY, size);
+                        return;
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let j = 1; j <= i; j++) {
+                        ctx.lineTo(points[j].x, points[j].y);
+                    }
+                    ctx.strokeStyle = '#FF85A2';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    i++;
+                }, 5); // 控制绘制速度
+            }
+            
+            // 填充爱心动画
+            function fillHeart(centerX, centerY, size) {
+                let fillPercentage = 0;
+                const fillInterval = setInterval(() => {
+                    fillPercentage += 1;
+                    
+                    // 清除并重新绘制完整轮廓
+                    ctx.clearRect(0, 0, easterEggCanvas.width, easterEggCanvas.height);
+                    ctx.beginPath();
+                    for (let t = 0; t <= 2 * Math.PI; t += 0.01) {
+                        const x = 16 * Math.pow(Math.sin(t), 3);
+                        const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                        if (t === 0) {
+                            ctx.moveTo(centerX + x * size / 16, centerY - y * size / 16);
+                        } else {
+                            ctx.lineTo(centerX + x * size / 16, centerY - y * size / 16);
+                        }
+                    }
+                    ctx.closePath();
+                    ctx.strokeStyle = '#FF85A2';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    // 填充
+                    ctx.fillStyle = `rgba(255, 133, 162, ${fillPercentage / 100})`;
+                    ctx.fill();
+                    
+                    if (fillPercentage >= 100) {
+                        clearInterval(fillInterval);
+                    }
+                }, 20); // 控制填充速度
+            }
+
+            // 检查答案
+            submitBtn.addEventListener('click', () => {
+                const answer = answerInput.value.trim();
+                
+                // 彩蛋密码逻辑
+                if (answer === easterEggCode) {
+                    resultDiv.textContent = '发现彩蛋！正在绘制心动轨迹...';
+                    resultDiv.classList.remove('hidden');
+                    
+                    // 停止动画
+                    clearInterval(animationInterval);
+                    isPlaying = false;
+                    
+                    // 隐藏其他元素，显示画布
+                    morseIndicator.classList.add('hidden');
+                    heart.classList.add('hidden');
+                    document.getElementById('input-container').classList.add('hidden');
+                    easterEggCanvas.classList.remove('hidden');
+                    
+                    // 显示重新开始按钮
+                    restartBtn.classList.remove('hidden');
+                    
+                    // 绘制爱心动画
+                    drawHeart();
+                } 
+                // 正常密码逻辑
+                else if (answer === secretMessage) {
+                    resultDiv.textContent = '恭喜你破译成功！我也爱你 ❤️';
+                    resultDiv.classList.remove('hidden');
+                    
+                    // 停止动画
+                    clearInterval(animationInterval);
+                    isPlaying = false;
+                    
+                    // 隐藏圆点指示器，显示爱心
+                    morseIndicator.classList.add('hidden');
+                    heart.classList.remove('hidden');
+                    setTimeout(() => {
+                        heart.classList.remove('opacity-0');
+                        heart.classList.add('heart-beat');
+                    }, 100);
+                    
+                    // 显示重新开始按钮
+                    restartBtn.classList.remove('hidden');
+                    
+                    // 隐藏输入框
+                    document.getElementById('input-container').classList.add('hidden');
+                    
+                    // 显示满屏爱心
+                    generateHearts();
+                } 
+                // 错误答案
+                else {
+                    resultDiv.textContent = '再试试吧～';
+                    resultDiv.classList.remove('hidden');
+                    setTimeout(() => {
+                        resultDiv.classList.add('hidden');
+                    }, 2000);
+                }
+            });
+
+            // 重新开始
+            restartBtn.addEventListener('click', () => {
+                // 重置状态
+                answerInput.value = '';
+                resultDiv.classList.add('hidden');
+                restartBtn.classList.add('hidden');
+                document.getElementById('input-container').classList.remove('hidden');
+                floatingHearts.classList.add('hidden');
+                floatingHearts.innerHTML = '';
+                easterEggCanvas.classList.add('hidden');
+                
+                // 隐藏爱心，显示圆点指示器
+                heart.classList.add('hidden', 'opacity-0');
+                heart.classList.remove('heart-beat');
+                morseIndicator.classList.remove('hidden');
+                
+                // 重新开始动画
+                currentIndex = 0;
+                startMorseAnimation();
+            });
+
+            // 按回车键提交答案
+            answerInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitBtn.click();
+                }
+            });
+
+            // 开始动画
+            startMorseAnimation();
+            
+            // 响应窗口大小变化
+            window.addEventListener('resize', () => {
+                if (!easterEggCanvas.classList.contains('hidden')) {
+                    drawHeart();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+    
