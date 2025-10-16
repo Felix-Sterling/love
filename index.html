@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>神秘网站</title>
+    <title>神秘网页</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script>
@@ -101,7 +101,7 @@
             </div>
             <div id="result" class="mt-6 text-xl font-medium text-primary hidden"></div>
         </div>
-        <button id="restart" class="mt-8 px-6 py-3 bg-secondary hover:bg-secondary/90 text-dark rounded-lg transition-all transform hover:scale-105 hidden">
+        <button id="restart" class="mt-8 px-6 py-3 bg-secondary hover:bg-secondary/90 text-dark rounded-lg transition-all transform hover:scale-105 hidden z-30">
             重新开始
         </button>
     </div>
@@ -117,11 +117,14 @@
             const restartBtn = document.getElementById('restart');
             const floatingHearts = document.getElementById('floating-hearts');
             const easterEggCanvas = document.getElementById('easter-egg-canvas');
+            const messageDiv = document.getElementById('message');
+            const heartContainer = document.getElementById('heart-container');
             const ctx = easterEggCanvas.getContext('2d');
             
             // 彩蛋密码设置为"心动"
             const easterEggCode = "我爱金辉";
             const secretMessage = '我爱你';
+            let floatingHeartInterval; // 用于存储漂浮爱心的定时器
             
             // 摩斯密码映射表
             const morseCodeMap = {
@@ -195,12 +198,22 @@
                 }, 6000);
             }
 
-            // 大量生成爱心
-            function generateHearts() {
+            // 持续生成漂浮爱心
+            function startFloatingHearts() {
                 floatingHearts.classList.remove('hidden');
-                for (let i = 0; i < 50; i++) {
-                    setTimeout(createFloatingHeart, i * 150);
+                // 立即生成一批爱心
+                for (let i = 0; i < 10; i++) {
+                    setTimeout(createFloatingHeart, i * 300);
                 }
+                // 设置定时器持续生成爱心
+                floatingHeartInterval = setInterval(createFloatingHeart, 1000);
+            }
+            
+            // 停止生成漂浮爱心
+            function stopFloatingHearts() {
+                clearInterval(floatingHeartInterval);
+                floatingHearts.classList.add('hidden');
+                floatingHearts.innerHTML = '';
             }
             
             // 绘制爱心函数 - 先画轮廓再填充
@@ -279,6 +292,8 @@
                     
                     if (fillPercentage >= 100) {
                         clearInterval(fillInterval);
+                        // 绘制完成后开始漂浮小爱心效果
+                        startFloatingHearts();
                     }
                 }, 20); // 控制填充速度
             }
@@ -289,21 +304,20 @@
                 
                 // 彩蛋密码逻辑
                 if (answer === easterEggCode) {
-                    resultDiv.textContent = '发现彩蛋！正在绘制心动轨迹...';
-                    resultDiv.classList.remove('hidden');
+                    // 清空窗口，只留下画布和重新开始按钮
+                    morseIndicator.classList.add('hidden');
+                    heart.classList.add('hidden');
+                    messageDiv.classList.add('hidden');
+                    easterEggCanvas.classList.remove('hidden');
+                    
+                    // 显示重新开始按钮并调整位置到屏幕底部
+                    restartBtn.classList.remove('hidden');
+                    restartBtn.style.position = 'fixed';
+                    restartBtn.style.bottom = '2rem';
                     
                     // 停止动画
                     clearInterval(animationInterval);
                     isPlaying = false;
-                    
-                    // 隐藏其他元素，显示画布
-                    morseIndicator.classList.add('hidden');
-                    heart.classList.add('hidden');
-                    document.getElementById('input-container').classList.add('hidden');
-                    easterEggCanvas.classList.remove('hidden');
-                    
-                    // 显示重新开始按钮
-                    restartBtn.classList.remove('hidden');
                     
                     // 绘制爱心动画
                     drawHeart();
@@ -332,7 +346,7 @@
                     document.getElementById('input-container').classList.add('hidden');
                     
                     // 显示满屏爱心
-                    generateHearts();
+                    startFloatingHearts();
                 } 
                 // 错误答案
                 else {
@@ -346,14 +360,17 @@
 
             // 重新开始
             restartBtn.addEventListener('click', () => {
-                // 重置状态
+                // 重置所有元素状态
                 answerInput.value = '';
                 resultDiv.classList.add('hidden');
                 restartBtn.classList.add('hidden');
+                restartBtn.style.position = 'static'; // 重置按钮位置
+                messageDiv.classList.remove('hidden');
                 document.getElementById('input-container').classList.remove('hidden');
-                floatingHearts.classList.add('hidden');
-                floatingHearts.innerHTML = '';
                 easterEggCanvas.classList.add('hidden');
+                
+                // 停止漂浮爱心
+                stopFloatingHearts();
                 
                 // 隐藏爱心，显示圆点指示器
                 heart.classList.add('hidden', 'opacity-0');
